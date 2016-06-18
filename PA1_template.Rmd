@@ -1,0 +1,96 @@
+Reproducible Research: Course Project 1  
+=======================================  
+1.  Code for reading in the dataset and/or processing the data
+``` {r echo=T}
+activity <- read.table(file="/Users/joe/Downloads/activity.csv", header=T, sep=",")
+dim(activity)
+summary(activity)
+```
+
+Marking a variable indicating the day of the week for each observation
+``` {r echo=T}
+activity$day_of_week <- weekdays(as.Date(activity$date))
+table(activity$day_of_week)
+```
+  
+  
+2. Histogram of the total number of steps taken each day  
+``` {r echo=T}
+date_steps <- tapply(activity$steps, activity$date, sum, na.rm=T)
+print(date_steps)
+hist(date_steps, xlab="Total Number of Steps", main="Total Number of Steps Each Day", col="grey", breaks=10)
+```
+
+
+3. Mean and median number of steps taken each day
+``` {r echo=T}
+mean(date_steps)
+median(date_steps)
+```
+
+
+4. Time series plot of the average number of steps taken
+```{r echo=T}
+interval_steps <- tapply(activity$steps, activity$interval, mean, na.rm=T)
+plot(names(interval_steps), interval_steps, type="l", xlab="Time Interval", ylab="Average Number of Steps", main="Average Number of Steps per Time Interval")
+```
+
+
+5. The 5-minute interval that, on average, contains the maximum number of steps
+```{r echo=T}
+names(interval_steps)[which(interval_steps == max(interval_steps))]
+```
+
+6. Code to describe and show a strategy for imputing missing data
+```{r echo=T}
+# Total number of missing values
+sum(is.na(activity$steps))
+# Proportion
+mean(is.na(activity$steps))
+
+# Imuputing missing number of steps per interval using Poisson regression
+p_fit <- glm(steps ~ interval + day_of_week, data=activity, family=poisson)
+summary(p_fit)
+imputed_values <- predict(p_fit, activity, type="response")
+
+# New dataset with imputed missing steps
+activity_imputed <- activity
+
+# Apply imputed values to NAs
+activity_imputed$impute_steps <- activity_imputed$steps # non missing same as steps
+activity_imputed$impute_steps[which(is.na(activity_imputed$steps))] <- imputed_values[which(is.na(activity_imputed$steps))] # missing get imputed value
+# Check that imputation was applied and no NA values exist in impute_steps variable
+sum(is.na(activity_imputed$impute_steps))
+```
+
+7. Histogram of the total number of steps taken each day after missing values are imputed
+```{r echo=T}
+# Histogram of imputed steps
+date_impute_steps <- tapply(activity_imputed$impute_steps, activity_imputed$date, sum)
+hist(date_impute_steps, xlab="Total Number of Steps", main="Total Number of Steps Each Day", col="grey", breaks=10)
+
+# Mean and Median of inputed steps
+mean(date_impute_steps)
+median(date_impute_steps)
+
+# Do the values differ from the estimate from the first part?
+t.test(date_steps, date_impute_steps, paired=T)
+wilcox.test(date_steps, date_impute_steps, paired=T, exact=F, conf.int=T)
+```
+
+Paired ttest and paired wilcoxon signed rank test show a significant difference between mean of paired difference and median of paired difference.  Both the mean and median of the non-imputed minus imputed paired differences have negative estimates, which shows that the imputated values are higher than the non-imputed values.
+  
+  
+8.Panel plot comparing the average number of steps taken per 5-minute inteval across weekdays and weekends
+```{r echo=T, fig.height=9}
+activity_imputed$weekday <- factor(activity_imputed$day_of_week %in% c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"), labels=c("Weekend", "Weekday"))
+
+table(activity_imputed$weekday)
+
+interval_steps_weekday <- tapply(activity_imputed$steps, list(activity_imputed$interval, activity_imputed$weekday), mean, na.rm=T)
+
+
+layout(matrix(c(1,2), 2, 1))
+plot(names(interval_steps_weekday[,1]), interval_steps_weekday[,1], type="l", xlab="Time Interval", ylab="Average Number of Steps", main=paste(colnames(interval_steps_weekday)[1],"Average Number of Steps per Time Interval"))
+plot(names(interval_steps_weekday[,2]), interval_steps_weekday[,2], type="l", xlab="Time Interval", ylab="Average Number of Steps", main=paste(colnames(interval_steps_weekday)[2],"Average Number of Steps per Time Interval"))
+```
